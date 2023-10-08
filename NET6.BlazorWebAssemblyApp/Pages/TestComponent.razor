@@ -1,0 +1,216 @@
+@page "/testcomponent"
+@using NET6.BlazorWebAssemblyApp.Dtos
+@using MyFreezer.API.DataServices
+@using BlazorStrap
+
+<PageTitle>Get users</PageTitle>
+
+<h1>Get users</h1>
+<Button Color="ButtonColor.Primary" Class="m-2" @onclick="() => OnShowModalClick(createUserModal)">Create user</Button>
+
+
+<Modal @ref="viewUserModal" Title="User" IsVerticallyCentered="true">
+    <BodyTemplate>
+        <p>Id - @pickedUser.Id</p>
+        <p>Login - @pickedUser.Login</p>
+        <p>Password - @pickedUser.Password</p>
+    </BodyTemplate>
+    <FooterTemplate>
+        <Button Color="ButtonColor.Danger" @onclick="() => OnHideModalClick(viewUserModal)">Close</Button>
+    </FooterTemplate>
+</Modal>
+
+<Modal @ref="createUserModal" Title="Create user" IsVerticallyCentered="true">
+    <BodyTemplate>
+        <BSRow>
+            <BSCol ColumnSmall="12" ColumnMedium="4">
+                <label>Login</label>
+            </BSCol>
+            <BSCol ColumnSmall="12" ColumnMedium="8">
+                <BSInput @bind-Value="createUserLogin" InputType="InputType.Text" placeholder="Input login of user"/>
+            </BSCol>
+
+        </BSRow>
+        <BSRow>
+            <BSCol ColumnSmall="12" ColumnMedium="4">
+                <label>Password</label>
+            </BSCol>
+            <BSCol ColumnSmall="12" ColumnMedium="8">
+                <BSInput @bind-Value="createUserPassword" InputType="InputType.Password" placeholder="Input password of user"/>
+            </BSCol>
+
+        </BSRow>
+
+
+    </BodyTemplate>
+    <FooterTemplate>
+        <Button Color="ButtonColor.Danger" @onclick="() => OnHideModalClick(createUserModal)">Close</Button>
+        <Button Color="ButtonColor.Success" @onclick="() => CreateUser()">Create</Button>
+    </FooterTemplate>
+</Modal>
+
+<Modal @ref="editUserModal" Title="Edit user" IsVerticallyCentered="true">
+    <BodyTemplate>
+        <BSRow>
+            <BSCol ColumnSmall="12" ColumnMedium="4">
+                <label>Login</label>
+            </BSCol>
+            <BSCol ColumnSmall="12" ColumnMedium="8">
+                <BSInput @bind-Value="pickedUserLogin" InputType="InputType.Text" placeholder="Input login of user"/>
+            </BSCol>
+
+        </BSRow>
+        <BSRow>
+            <BSCol ColumnSmall="12" ColumnMedium="4">
+                <label>Password</label>
+            </BSCol>
+            <BSCol ColumnSmall="12" ColumnMedium="8">
+                <BSInput @bind-Value="pickedUserPassword" InputType="InputType.Password" placeholder="Input password of user"/>
+            </BSCol>
+
+        </BSRow>
+    </BodyTemplate>
+    <FooterTemplate>
+        <Button Color="ButtonColor.Primary" @onclick="() => UndoEdit()">Undo</Button>
+        <Button Color="ButtonColor.Danger" @onclick="() => OnHideModalClick(editUserModal)">Close</Button>
+        <Button Color="ButtonColor.Success" @onclick="() => UpdateUser()">Update</Button>
+    </FooterTemplate>
+</Modal>
+
+<Grid
+    @ref="usersGrid" 
+    TItem="UserDto"
+    Class="table table-hover table-bordered table-striped"
+    DataProvider="UsersDataProvider"
+    AllowPaging="true"
+    PageSize="5"
+    Responsive="true">
+    <GridColumn TItem="UserDto" HeaderText="Id">@context.Id</GridColumn>
+    <GridColumn TItem="UserDto" HeaderText="Login">@context.Login</GridColumn>
+    <GridColumn TItem="UserDto" HeaderText="Password">@context.Password</GridColumn>
+    <GridColumn TItem="UserDto" HeaderText="CRUD">
+        <Button Color="ButtonColor.Info" @onclick="() => ViewUser(context)">View</Button>
+        <Button Color="ButtonColor.Primary" @onclick="() => OnShowEditModalClick(context)">Edit</Button>
+        <Button Color="ButtonColor.Danger" @onclick="() => DeleteUser(context)">Delete</Button>
+    </GridColumn>
+</Grid>
+
+<Preload/>
+
+
+@code {
+    private List<UserDto> users = default!;
+    private Modal viewUserModal = default!;
+    private Modal createUserModal = default!;
+    private Modal editUserModal = default!;
+    private UserDto pickedUser = default!;
+    private UserDto savePickedUser = default!;
+    private Grid<UserDto> usersGrid = default!;
+
+
+    private int pickedUserId = default!;
+    private string pickedUserLogin = default!;
+    private string pickedUserPassword = default!;
+    
+    private string savePickedUserLogin = default!;
+    private string savePickedUserPassword = default!;
+
+    
+
+    private string createUserLogin;
+    private string createUserPassword;
+
+    private async Task OnShowEditModalClick(UserDto userDto)
+    {
+        if (userDto != null)
+        {
+            pickedUserId = (int)userDto.Id;
+            pickedUserLogin = userDto.Login;
+            savePickedUserLogin = userDto.Login;
+            pickedUserPassword = userDto.Password;
+            savePickedUserPassword = userDto.Password;
+            await editUserModal.ShowAsync();
+        }
+    }
+
+    private async Task UndoEdit()
+    {
+        pickedUserLogin = savePickedUserLogin;
+        pickedUserPassword = savePickedUserPassword;
+    }
+    
+    private async Task OnShowModalClick(Modal modal)
+    {
+        await modal.ShowAsync();
+    }
+
+    private async Task OnHideModalClick(Modal modal)
+    {
+        await modal.HideAsync();
+    }
+
+    private async void ViewUser(UserDto user)
+    {
+        pickedUser = user;
+        await viewUserModal.ShowAsync();
+    }
+
+    private async void DeleteUser(UserDto user)
+    {
+        await _userDataService.DeleteUser(user.Id.Value);
+        users = await _userDataService.GetUsers();
+        await usersGrid.RefreshDataAsync();
+    }
+    
+
+    [Inject]
+    protected PreloadService PreloadService { get; set; }
+
+    [Inject]
+    private IUserDataService _userDataService { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        users = await _userDataService.GetUsers();
+    }
+
+
+    private async Task<GridDataProviderResult<UserDto>> UsersDataProvider(GridDataProviderRequest<UserDto> request)
+    {
+        if (users is null)
+        {
+            users = await _userDataService.GetUsers(); // call a service or an API to pull the employees
+        }
+        return await Task.FromResult(request.ApplyTo(users));
+    }
+
+    private async void CreateUser()
+    {
+        var createUser = new UserDto
+        {
+            Login = createUserLogin,
+            Password = createUserPassword,
+        };
+        await _userDataService.AddUser(createUser);
+    }
+
+    private async void UpdateUser()
+    {
+        var updateUser = new UserDto
+        {
+            Id = pickedUserId,
+            Login = pickedUserLogin,
+            Password = pickedUserPassword,
+        };
+        await _userDataService.UpdateUser(updateUser);
+
+        users = await _userDataService.GetUsers();
+        await usersGrid.RefreshDataAsync();
+
+        await editUserModal.HideAsync();
+    }
+
+
+
+
+}

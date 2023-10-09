@@ -46,6 +46,7 @@ builder.Services.AddAuthorization();
 
 
 builder.Services.AddSingleton<DapperContext>();
+builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 builder.Services.AddTransient<IUserRepository, UserDapperRepository>();
 builder.Services.AddTransient<IAuthorizationRepository, AuthorizationDapperRepository>();
 builder.Services.AddSingleton<IAuthorizationManager, AuthorizationManager>();
@@ -78,7 +79,8 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("CorsPolicy",
         builder => builder
-            .WithOrigins("https://localhost:3100")
+            .WithOrigins("https://localhost:3500")
+            .WithOrigins("http://localhost:3500")
             .AllowCredentials()
             .AllowAnyHeader()
             .WithMethods("POST"));

@@ -1,17 +1,11 @@
 import React from 'react';
 import AppContent from './Components/AppContent'
+import NavBar from './Components/NavBar'
+import Login from './Components/Login'
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 
-const router = createBrowserRouter([
-    {
-        path: "/",
-        element: <div>Hello</div>
-    },
-    {
-        path: "/login",
-        element: <Login/>
-    }
-])
+
+
 
 function App() {
 

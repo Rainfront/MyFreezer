@@ -1,5 +1,6 @@
 using GraphQL;
 using GraphQL.Types;
+using Microsoft.AspNetCore.Mvc;
 using MyFreezer.API.GraphQL.Types.Identity;
 using MyFreezer.API.Models;
 using MyFreezer.API.Repositories.Interfaces;
@@ -46,6 +47,54 @@ public class IdentityGraphQLQuery : ObjectGraphType
                     userId = (int)user.Id,
                 };
                 return response;
+            });
+        Field<IdentityOutputTypeGraphQL>("refreshTokens")
+            .Resolve(context =>
+            {
+                HttpContext httpContext = context.RequestServices.GetService<IHttpContextAccessor>().HttpContext;
+
+                var refreshTokenRaw = httpContext.Request.Headers.Authorization;
+                var token = refreshTokenRaw.ToString().Replace("Bearer ", string.Empty);
+                if (token == "")
+                {
+                    context.Errors.Add(new ExecutionError("Token is missing."));
+                    return null;
+                }
+                var refreshToken = _authorizationManager.ReadJwtToken(token);
+                try
+                {
+                    if (_authorizationManager.IsValidRefreshToken(token))
+                    {
+                        var userId = Convert.ToInt32(_authorizationManager.GetValueFromClaims(refreshToken, "userId"));
+                        var newAccessToken = _authorizationManager.GetAccessToken(userId);
+                        var newRefreshToken = _authorizationManager.GetRefreshToken(userId);
+                        _authorizationRepository.UpdateRefreshToken(token, newRefreshToken, userId);
+                        var response = new IdentityOutputType
+                        {
+                            accessToken = newAccessToken,
+                            refreshToken = newRefreshToken,
+                            userId = userId
+                        };
+                        return response;
+                    }
+                    _authorizationRepository.DeleteRefreshToken(token);
+                    context.Errors.Add(new ExecutionError("Refresh token is not valid."));
+                    return null;
+                }
+                catch (Exception exception)
+                {
+                    context.Errors.Add(new ExecutionError(exception.Message));
+                    return null;
+                }
+            });
+        Field<StringGraphType>("logout")
+            .Resolve(context =>
+            {
+                HttpContext httpContext = context.RequestServices.GetService<IHttpContextAccessor>().HttpContext;
+                var refreshTokenRaw = httpContext.Request.Headers.Authorization;
+                var token = refreshTokenRaw.ToString().Replace("Bearer ", string.Empty);
+                _authorizationRepository.DeleteRefreshToken(token);
+                return "You successfully logged out";
             });
     }
 }

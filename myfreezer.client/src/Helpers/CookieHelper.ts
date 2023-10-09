@@ -1,32 +1,63 @@
-/*
- * General utils for managing cookies in Typescript.
- */
-export function setCookie(name: string, val: string) {
-    const date = new Date();
-    const value = val;
-
-    // Set it expire in 7 days
-    date.setTime(date.getTime() + (7 * 24 * 60 * 60 * 1000));
-
-    // Set it
-    document.cookie = name+"="+value+"; expires="+date.toUTCString()+"; path=/";
+type Options = {
+    expires?: Date|number|string,
+    path?: string,
+    domain?: string,
+    secure?: boolean,
 }
 
-export function getCookie(name: string) {
-    const value = "; " + document.cookie;
-    const parts = value.split("; " + name + "=");
+class Cookie
+{
+    static set(name: string, value: string, options?: Options)
+    {
+        options = options || {};
 
-    if (parts.length == 2) {
-        return parts!.pop()!.split(";").shift();
+        let expires = options.expires;
+
+        if (typeof expires == "number" && expires) {
+            let d = new Date();
+            d.setTime(d.getTime() + expires * 1000);
+            expires = options.expires = d;
+        }
+        if (expires && (<Date>expires).toUTCString) {
+            options.expires = (<Date>expires).toUTCString();
+        }
+
+        value = encodeURIComponent(value);
+
+        let updatedCookie = name + "=" + value;
+
+        let propName: keyof Options;
+        for (propName in options) {
+            updatedCookie += "; " + propName;
+            let propValue = options[propName];
+            if (propValue !== true) {
+                updatedCookie += "=" + propValue;
+            }
+        }
+
+        document.cookie = updatedCookie;
+    }
+
+    static get (name: string): string
+    {
+        let matches = document.cookie.match(
+            new RegExp("(?:^|; )" + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + "=([^;]*)"));
+        return matches ? decodeURIComponent(matches[1]) : '';
     }
 }
 
-export function deleteCookie(name: string) {
-    const date = new Date();
-
-    // Set it expire in -1 days
-    date.setTime(date.getTime() + (-1 * 24 * 60 * 60 * 1000));
-
-    // Set it
-    document.cookie = name+"=; expires="+date.toUTCString()+"; path=/";
+export function setCookie(name: string, value: string, options?: Options) {
+    Cookie.set(name, value, options)
 }
+
+export function getCookie(name: string) {
+    return Cookie.get(name);
+}
+
+export function deleteCookie(name: string) {
+    setCookie(name, "", {
+        expires: -1
+    })
+}
+
+export default Cookie;

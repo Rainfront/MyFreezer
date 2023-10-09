@@ -11,17 +11,20 @@ public class AuthorizationManager : IAuthorizationManager
 {
     private readonly IUserRepository _userRepository;
     private readonly IConfiguration _configuration;
+    private readonly IAuthorizationRepository _authorizationRepository;
 
-    public AuthorizationManager(IUserRepository userRepository, IConfiguration configuration)
+    public AuthorizationManager(IUserRepository userRepository, IConfiguration configuration,
+        IAuthorizationRepository authorizationRepository)
     {
         _userRepository = userRepository;
         _configuration = configuration;
+        _authorizationRepository = authorizationRepository;
     }
 
     public JWTTokenType GetAccessToken(int userId)
     {
         var permissions = _userRepository.GetPermissions(userId);
-        
+
         var issuedAt = DateTime.UtcNow;
         var expiredAt = DateTime.UtcNow.Add(
             TimeSpan.FromMinutes(IAuthorizationManager.AccessTokenExperationSeconds)
@@ -46,15 +49,16 @@ public class AuthorizationManager : IAuthorizationManager
             expiredAt = expiredAt,
             issuedAt = issuedAt
         };
-        return jwtToken; 
+        return jwtToken;
     }
+
     public JWTTokenType GetRefreshToken(int userId)
     {
         var issuedAt = DateTime.UtcNow;
         var expiredAt = DateTime.UtcNow.Add(
             TimeSpan.FromMinutes(IAuthorizationManager.RefreshTokenExperationSeconds)
         );
-        
+
         var newRefreshToken = new JwtSecurityToken(
             issuer: _configuration["JWT:Author"],
             audience: _configuration["JWT:Audience"],
@@ -75,7 +79,54 @@ public class AuthorizationManager : IAuthorizationManager
             expiredAt = expiredAt,
             issuedAt = issuedAt
         };
-        return jwtToken; 
+        return jwtToken;
     }
-    
+
+    public JwtSecurityToken ReadJwtToken(string token) => new JwtSecurityTokenHandler().ReadJwtToken(token);
+
+    public string GetValueFromClaims(JwtSecurityToken token, string claimName) =>
+        token.Claims.First(c => c.Type == claimName).Value;
+
+
+    public bool IsValidToken(string token)
+    {
+        try
+        {
+            var tokenValidate = new JwtSecurityTokenHandler();
+
+            tokenValidate.ValidateToken(token, new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = _configuration["JWT:Author"],
+                ValidateAudience = true,
+                ValidAudience = _configuration["JWT:Audience"],
+                ValidateLifetime = true,
+                IssuerSigningKey = AuthOptions.GetSymmetricSecurityKey(),
+                ValidateIssuerSigningKey = true,
+                ClockSkew = TimeSpan.Zero
+            }, out SecurityToken securityToken);
+        }
+        catch
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    public bool IsValidRefreshToken(string token)
+    {
+        if (!IsValidToken(token))
+            return false;
+
+        JwtSecurityToken refreshToken = ReadJwtToken(token);
+        var isRefreshToken = bool.Parse(GetValueFromClaims(refreshToken, "isRefreshToken"));
+        if (!isRefreshToken)
+            throw new Exception("It is not refresh token!");
+
+        var savedTokenType = _authorizationRepository.GetRefreshToken(token);
+        var savedToken = ReadJwtToken(savedTokenType!.token);
+
+        return refreshToken.RawSignature == savedToken.RawSignature;
+    }
 }
